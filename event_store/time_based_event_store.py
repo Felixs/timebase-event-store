@@ -1,38 +1,33 @@
-import time
 from collections import defaultdict
 from typing import List
 
-from event_store.event import Event
+from event_store.timed_event import TimedEvent
 
 
+# TODO: rename: TimeBaseEventStore -> TimedEventStore
 class TimeBaseEventStore:
     def __init__(self) -> None:
-        self._events = defaultdict(lambda: defaultdict(dict))
+        self._events = defaultdict(lambda: [])
 
-    def get(self, key: str) -> dict:
+    def add(self, key: str, timestamp: int, event_data: dict) -> None:
+        event = TimedEvent(timestamp=timestamp, data=event_data)
+        self._events[key].append(event)
+        self._events[key].sort()
+
+    def get(self, key: str) -> TimedEvent | None:
         if key in self._events:
-            highest_timestamp = max(self._events[key].keys())
-            highest_insert_time = max(self._events[key][highest_timestamp].keys())
-            return self._events[key][highest_timestamp][highest_insert_time].data
-        return {}
+            return self._events[key][-1]
 
-    def add(self, key: str, timestamp: float, event_data: dict) -> None:
-        insert_time = time.time_ns()
-        self._events[key][timestamp][insert_time] = Event(data=event_data)
+        return None
 
-    def get_first(self, key: str) -> dict:
-        lowest_timestamp = min(self._events[key].keys())
-        lowest_insert_time = min(self._events[key][lowest_timestamp].keys())
-        return self._events[key][lowest_timestamp][lowest_insert_time].data
+    def get_first(self, key: str) -> TimedEvent | None:
+        if key in self._events:
+            return self._events[key][0]
 
-    def get_all(self, key: str) -> List[dict]:
-        result = []
-        for _, timestamp_entry in sorted(self._events[key].items()):
-            for _, insert_time_entry in sorted(timestamp_entry.items()):
-                result.append(insert_time_entry.data)
+        return None
 
-        return result
+    def get_all(self, key: str) -> List[TimedEvent] | None:
+        if key in self._events:
+            return [event.values for event in self._events[key]]
 
-    def get_all_formated(self, key: str, format: dict) -> List[dict]:
-        data = self.get_all(key)
-        return [Event.formated_event_data(data_entry, format) for data_entry in data]
+        return None
