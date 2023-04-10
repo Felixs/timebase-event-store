@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 from httpx import AsyncClient
 
 from api.app import create_app, cleanup
@@ -61,20 +62,25 @@ class TestAppMain(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(response.status_code, 404)
             self.assertEqual(response.json(), {"detail": "No data for key"})
 
-    async def test_reset_data(self):
+    @patch("api.app.cleanup")
+    async def test_reset_data(self, mock_reset):
         async with AsyncClient(app=self.app, base_url="http://test") as ac:
-            await ac.post("/event", json={"timestamp": 1, "data": {"a": 1, "b": 2}})
-            response = await ac.get("/event/a")
-            self.assertEqual(response.status_code, 200)
             response = await ac.delete("/reset")
             self.assertEqual(response.status_code, 200)
-            response = await ac.get("/event/c")
-            self.assertEqual(response.status_code, 404)
+            self.assertEqual(mock_reset.call_count, 1)
 
     async def test_add_events_by_id(self):
         async with AsyncClient(app=self.app, base_url="http://test") as ac:
             response = await ac.post("/events/1", json={"timestamp": 1, "data": {"a": 1, "b": 2}})
             self.assertEqual(response.status_code, 200)
+
+    async def test_add_events_by_id_without_timestamp(self):
+        async with AsyncClient(app=self.app, base_url="http://test") as ac:
+            response = await ac.post("/events/1", json={"data": {"a": 1, "b": 2}})
+            self.assertEqual(response.status_code, 200)
+            response = await ac.get("/events/1/a")
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.json()["data"][0][1], 1)
 
     async def test_get_events_value_by_id(self):
         async with AsyncClient(app=self.app, base_url="http://test") as ac:
@@ -83,6 +89,19 @@ class TestAppMain(unittest.IsolatedAsyncioTestCase):
             response = await ac.get("/events/1/a")
             self.assertEqual(response.status_code, 200)
             self.assertEqual(response.json(), {"data": [[1, 1]]})
+
+    async def test_get_events_by_id_for_missing_id(self):
+        async with AsyncClient(app=self.app, base_url="http://test") as ac:
+            response = await ac.get("/events/a/a")
+            self.assertEqual(response.status_code, 404)
+            self.assertEqual(response.json(), {"detail": "No data for id a"})
+
+    async def test_get_events_by_id_for_missing_values(self):
+        async with AsyncClient(app=self.app, base_url="http://test") as ac:
+            response = await ac.post("/events/1", json={"timestamp": 1, "data": {"a": 1, "b": 2}})
+            response = await ac.get("/events/1/c")
+            self.assertEqual(response.status_code, 404)
+            self.assertEqual(response.json(), {"detail": "No data for value c"})
 
     async def test_get_events_values_by_id_for_missing_id(self):
         async with AsyncClient(app=self.app, base_url="http://test") as ac:
@@ -139,3 +158,10 @@ class TestAppMain(unittest.IsolatedAsyncioTestCase):
                     }
                 },
             )
+
+    @patch("event_series.EventSeriesStorage.clear")
+    @patch("event_series.EventSeries.clear")
+    def test_cleanup(self, ess_clear, es_clear):
+        cleanup()
+        ess_clear.assert_called_once()
+        es_clear.assert_called_once()

@@ -66,9 +66,6 @@ async def get_event_by_id(id: str, value: str):
 async def get_values(value: str):
     try:
         series_data = storage.value_series(value)
-        if not series_data:
-            raise HTTPException(status_code=404, detail=f"No data for value {value}")
-
         return {"data": series_data}
     except KeyError:
         raise HTTPException(status_code=404, detail=f"No data for value {value}")
@@ -76,7 +73,7 @@ async def get_values(value: str):
 
 @app.delete("/reset")
 async def reset():
-    series.clear()
+    cleanup()
     return 200
 
 
