@@ -70,3 +70,72 @@ class TestAppMain(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(response.status_code, 200)
             response = await ac.get("/event/c")
             self.assertEqual(response.status_code, 404)
+
+    async def test_add_events_by_id(self):
+        async with AsyncClient(app=self.app, base_url="http://test") as ac:
+            response = await ac.post("/events/1", json={"timestamp": 1, "data": {"a": 1, "b": 2}})
+            self.assertEqual(response.status_code, 200)
+
+    async def test_get_events_value_by_id(self):
+        async with AsyncClient(app=self.app, base_url="http://test") as ac:
+            response = await ac.post("/events/1", json={"timestamp": 1, "data": {"a": 1, "b": 2}})
+            self.assertEqual(response.status_code, 200)
+            response = await ac.get("/events/1/a")
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.json(), {"data": [[1, 1]]})
+
+    async def test_get_events_values_by_id_for_missing_id(self):
+        async with AsyncClient(app=self.app, base_url="http://test") as ac:
+            response = await ac.get("/values/a")
+            self.assertEqual(response.status_code, 404)
+            self.assertEqual(response.json(), {"detail": "No data for value a"})
+
+    async def test_get_events_values_by_id_for_missing_key(self):
+        async with AsyncClient(app=self.app, base_url="http://test") as ac:
+            response = await ac.post("/events/1", json={"timestamp": 1, "data": {"a": 1, "b": 2}})
+            self.assertEqual(response.status_code, 200)
+            response = await ac.get("/values/c")
+            self.assertEqual(response.status_code, 404)
+            self.assertEqual(response.json(), {"detail": "No data for value c"})
+
+    async def test_larger_event_series(self):
+        async with AsyncClient(app=self.app, base_url="http://test") as ac:
+            await ac.post("/events/1", json={"timestamp": 1, "data": {"a": 1, "b": 1}})
+            await ac.post("/events/1", json={"timestamp": 2, "data": {"a": 2, "b": 2}})
+            await ac.post("/events/1", json={"timestamp": 3, "data": {"a": 3, "b": 3}})
+            await ac.post("/events/1", json={"timestamp": 4, "data": {"a": 4, "b": 4}})
+            await ac.post("/events/1", json={"timestamp": 5, "data": {"a": 5, "b": 5}})
+            await ac.post("/events/2", json={"timestamp": 1, "data": {"c": 5, "b": 5}})
+            await ac.post("/events/2", json={"timestamp": 2, "data": {"c": 4, "b": 4}})
+            await ac.post("/events/2", json={"timestamp": 3, "data": {"c": 3, "b": 3}})
+            await ac.post("/events/2", json={"timestamp": 4, "data": {"c": 2, "b": 2}})
+            await ac.post("/events/2", json={"timestamp": 5, "data": {"c": 1, "b": 1}})
+            response = await ac.get("/values/a")
+            self.assertEqual(
+                response.json(),
+                {
+                    "data": {
+                        "1": [[1, 1], [2, 2], [3, 3], [4, 4], [5, 5]],
+                    }
+                },
+            )
+            response = await ac.get("/values/b")
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(
+                response.json(),
+                {
+                    "data": {
+                        "1": [[1, 1], [2, 2], [3, 3], [4, 4], [5, 5]],
+                        "2": [[1, 5], [2, 4], [3, 3], [4, 2], [5, 1]],
+                    }
+                },
+            )
+            response = await ac.get("/values/c")
+            self.assertEqual(
+                response.json(),
+                {
+                    "data": {
+                        "2": [[1, 5], [2, 4], [3, 3], [4, 2], [5, 1]],
+                    }
+                },
+            )
