@@ -46,6 +46,9 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
+### Run
+```uvicorn main:app --reload```
+
 ### Helpers
 
 Run test and create coverage file:
