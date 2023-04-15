@@ -18,7 +18,8 @@ class TestAppMain(unittest.IsolatedAsyncioTestCase):
         async with AsyncClient(app=self.app, base_url="http://test") as ac:
             response = await ac.get("/")
             self.assertEqual(response.status_code, 200)
-            self.assertEqual(response.json(), {"message": "Hello World"})
+            self.assertTrue(response.text.startswith("<!DOCTYPE html>"))
+            self.assertTrue(response.text.endswith("</html>"))
 
     async def test_add_event(self):
         async with AsyncClient(app=self.app, base_url="http://test") as ac:
@@ -165,3 +166,10 @@ class TestAppMain(unittest.IsolatedAsyncioTestCase):
         cleanup()
         ess_clear.assert_called_once()
         es_clear.assert_called_once()
+
+    async def test_visualize(self):
+        async with AsyncClient(app=self.app, base_url="http://test") as ac:
+            await ac.post("/events/1", json={"timestamp": 1, "data": {"a": 1, "b": 1}})
+            response = await ac.get("/visualize/1/a")
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.headers["content-type"], "image/png")
